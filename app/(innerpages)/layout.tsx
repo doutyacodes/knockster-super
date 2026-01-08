@@ -29,6 +29,7 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
     { name: 'Overview', path: '/', icon: LayoutDashboard },
     { name: 'Organizations', path: '/organizations', icon: Network },
     { name: 'Admin Management', path: '/admins', icon: Users },
+    { name: 'Notifications', path: '/notifications', icon: Bell },
     { name: 'App Settings', path: '/app-settings', icon: SettingsIcon },
     // { name: 'Plans & Security', path: '/plans', icon: ShieldCheck },
     // { name: 'Audit Logs', path: '/logs', icon: ClipboardList },
