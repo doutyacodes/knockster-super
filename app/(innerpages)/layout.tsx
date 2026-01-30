@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import React, { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   LayoutDashboard,
   Network,
@@ -14,23 +14,26 @@ import {
   Menu,
   ChevronRight,
   LogOut,
-  Bell
-} from 'lucide-react';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { useAuth } from '@/contexts/AuthContext';
+  Bell,
+} from "lucide-react";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 
-export default function InnerPagesLayout({ children }: { children: React.ReactNode }) {
+export default function InnerPagesLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
   const navItems = [
-    { name: 'Overview', path: '/', icon: LayoutDashboard },
-    { name: 'Organizations', path: '/organizations', icon: Network },
-    { name: 'Admin Management', path: '/admins', icon: Users },
-    { name: 'Notifications', path: '/notifications', icon: Bell },
-    { name: 'App Settings', path: '/app-settings', icon: SettingsIcon },
+    { name: "Organizations", path: "/organizations", icon: Network },
+    { name: "Admin Management", path: "/admins", icon: Users },
+    { name: "Notifications", path: "/notifications", icon: Bell },
+    { name: "App Settings", path: "/app-settings", icon: SettingsIcon },
     // { name: 'Plans & Security', path: '/plans', icon: ShieldCheck },
     // { name: 'Audit Logs', path: '/logs', icon: ClipboardList },
   ];
@@ -40,7 +43,9 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  const activePage = navItems.find(item => item.path === pathname) || { name: 'Dashboard' };
+  const activePage = navItems.find((item) => item.path === pathname) || {
+    name: "Dashboard",
+  };
 
   return (
     <ProtectedRoute>
@@ -54,12 +59,14 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
         )}
 
         {/* Sidebar */}
-        <aside className={`
+        <aside
+          className={`
           fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out
           lg:relative lg:translate-x-0
-          ${isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 lg:translate-x-0'}
-          ${!isSidebarOpen && !isMobileMenuOpen ? 'lg:w-20' : 'lg:w-72'}
-        `}>
+          ${isMobileMenuOpen ? "translate-x-0 w-72" : "-translate-x-full w-72 lg:translate-x-0"}
+          ${!isSidebarOpen && !isMobileMenuOpen ? "lg:w-20" : "lg:w-72"}
+        `}
+        >
           <div className="flex flex-col h-full">
             {/* Logo Section */}
             <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
@@ -81,18 +88,25 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
                   href={item.path}
                   className={`
                     flex items-center px-3 py-2.5 rounded-xl transition-all group
-                    ${pathname === item.path
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}
+                    ${
+                      pathname === item.path
+                        ? "bg-blue-50 text-blue-600"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                    }
                   `}
                 >
-                  <item.icon className={`shrink-0 w-5 h-5 ${pathname === item.path ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                  <item.icon
+                    className={`shrink-0 w-5 h-5 ${pathname === item.path ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`}
+                  />
                   {(isSidebarOpen || isMobileMenuOpen) && (
-                    <span className="ml-3 font-medium text-sm whitespace-nowrap">{item.name}</span>
+                    <span className="ml-3 font-medium text-sm whitespace-nowrap">
+                      {item.name}
+                    </span>
                   )}
-                  {pathname === item.path && (isSidebarOpen || isMobileMenuOpen) && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />
-                  )}
+                  {pathname === item.path &&
+                    (isSidebarOpen || isMobileMenuOpen) && (
+                      <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />
+                    )}
                 </Link>
               ))}
             </nav>
@@ -103,8 +117,12 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
                 <UserCircle className="w-6 h-6 shrink-0 text-blue-600" />
                 {(isSidebarOpen || isMobileMenuOpen) && (
                   <div className="ml-3 overflow-hidden">
-                    <p className="text-sm font-semibold text-slate-800 truncate">Super Admin</p>
-                    <p className="text-xs text-slate-400 truncate">{user?.email || 'admin@knockster.io'}</p>
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      Super Admin
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {user?.email || "admin@knockster.io"}
+                    </p>
                   </div>
                 )}
               </div>
@@ -116,7 +134,9 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="hidden lg:flex absolute -right-3 top-20 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-slate-600 hover:border-slate-300"
           >
-            <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? 'rotate-180' : ''}`} />
+            <ChevronRight
+              className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? "rotate-180" : ""}`}
+            />
           </button>
         </aside>
 
@@ -134,7 +154,9 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
               <div className="hidden lg:flex items-center text-sm text-slate-500 font-medium">
                 <span className="text-slate-400">Knockster</span>
                 <ChevronRight className="w-4 h-4 mx-2 text-slate-300" />
-                <span className="text-slate-800">{(activePage as any).name}</span>
+                <span className="text-slate-800">
+                  {(activePage as any).name}
+                </span>
               </div>
             </div>
 
@@ -149,15 +171,15 @@ export default function InnerPagesLayout({ children }: { children: React.ReactNo
                 className="flex items-center space-x-2 text-slate-500 hover:text-red-600 px-3 py-1.5 rounded-lg transition-all"
               >
                 <LogOut className="w-4 h-4" />
-                <span className="text-sm font-medium hidden sm:inline">Logout</span>
+                <span className="text-sm font-medium hidden sm:inline">
+                  Logout
+                </span>
               </button>
             </div>
           </header>
 
           {/* Page Content */}
-          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-            {children}
-          </div>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</div>
         </main>
       </div>
     </ProtectedRoute>
