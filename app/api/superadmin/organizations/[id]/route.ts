@@ -18,8 +18,9 @@ type RouteContext<T> = {
 
 const updateOrgSchema = z.object({
   name: z.string().min(1).optional(),
-  type: z.enum(['techpark', 'block', 'building', 'company', 'gate', 'custom']).optional(),
+  type: z.enum(['techpark', 'block', 'building', 'company', 'school', 'classroom', 'lab', 'gate', 'custom']).optional(),
   status: z.enum(['active', 'suspended']).optional(),
+  maxSubNodes: z.number().min(0).optional(),
   planOverrideLevel: z.number().min(1).max(4).nullable().optional(),
 });
 

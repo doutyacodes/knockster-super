@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Network,
   Plus,
   Search,
   ChevronRight,
@@ -15,7 +14,6 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  Pencil,
   Trash2,
   CreditCard,
   Calendar,
@@ -29,7 +27,9 @@ interface OrgNode {
   type: string;
   parentId?: string | null;
   status: string;
+  maxSubNodes: number;
   children?: OrgNode[];
+  createdAt: string;
 }
 
 interface OrgPlan {
@@ -60,6 +60,14 @@ interface Plan {
   allowL4: boolean;
   maxGuards: number;
   maxGuestPasses: number;
+  duration: string;
+}
+
+interface SubNodeAdmin {
+  id: string;
+  email: string;
+  status: string;
+  createdAt: string;
 }
 
 interface TreeItemProps {
@@ -137,31 +145,29 @@ const Organizations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Plan management
+  // Modals state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
+  // Forms state
+  const [editForm, setEditForm] = useState({ id: '', name: '', type: '', maxSubNodes: 0 });
+  const [createForm, setCreateForm] = useState({ name: '', type: 'company', parentId: '', maxSubNodes: 0 });
+  const [assignPlanForm, setAssignPlanForm] = useState({ subscriptionPlanId: '', startDate: new Date().toISOString().split('T')[0], endDate: '' });
+  const [adminForm, setAdminForm] = useState({ email: "", password: "" });
+
+  // Plan/Admin data state
   const [orgPlans, setOrgPlans] = useState<OrgPlan[]>([]);
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
-  const [isAssignPlanModalOpen, setIsAssignPlanModalOpen] = useState(false);
+  const [nodeAdmins, setNodeAdmins] = useState<SubNodeAdmin[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
 
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    type: 'company',
-    parentId: '',
-  });
-
-  const [assignPlanForm, setAssignPlanForm] = useState({
-    subscriptionPlanId: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: '',
-  });
-
   useEffect(() => {
-    fetchOrganizations();
-    fetchAvailablePlans();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -169,6 +175,12 @@ const Organizations: React.FC = () => {
       fetchOrgPlans(selectedNode.id);
     }
   }, [selectedNode]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    await Promise.all([fetchOrganizations(), fetchAvailablePlans()]);
+    setLoading(false);
+  };
 
   const fetchAvailablePlans = async () => {
     try {
@@ -193,7 +205,6 @@ const Organizations: React.FC = () => {
 
   const fetchOrganizations = async () => {
     try {
-      setLoading(true);
       const data = await api.get<OrgNode[]>('/api/superadmin/organizations?includeChildren=true');
       const tree = buildTree(data);
       setNodes(tree);
@@ -202,8 +213,6 @@ const Organizations: React.FC = () => {
       }
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -241,11 +250,37 @@ const Organizations: React.FC = () => {
       await api.post('/api/superadmin/organizations', {
         ...createForm,
         parentId: createForm.parentId || null,
+        maxSubNodes: Number(createForm.maxSubNodes),
       });
       setSuccess('Organization node created successfully!');
       setIsCreateModalOpen(false);
-      setCreateForm({ name: '', type: 'company', parentId: '' });
+      setCreateForm({ name: '', type: 'company', parentId: '', maxSubNodes: 0 });
       fetchOrganizations();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateNode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+
+    try {
+      await api.patch(`/api/superadmin/organizations/${editForm.id}`, {
+        name: editForm.name,
+        type: editForm.type,
+        maxSubNodes: Number(editForm.maxSubNodes),
+      });
+      setSuccess('Organization updated successfully!');
+      setIsEditModalOpen(false);
+      fetchOrganizations();
+      if (selectedNode?.id === editForm.id) {
+        setSelectedNode(prev => prev ? { ...prev, name: editForm.name, type: editForm.type, maxSubNodes: Number(editForm.maxSubNodes) } : null);
+      }
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
       setError(err.message);
@@ -269,6 +304,38 @@ const Organizations: React.FC = () => {
     }
   };
 
+  const fetchNodeAdmins = async (nodeId: string) => {
+    try {
+      const admins = await api.get<SubNodeAdmin[]>(`/api/organizations/sub-node-admins?organizationNodeId=${nodeId}`);
+      setNodeAdmins(admins);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch node admins");
+    }
+  };
+
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNode) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      await api.post("/api/organizations/sub-node-admins", {
+        ...adminForm,
+        organizationNodeId: selectedNode.id,
+      });
+      setSuccess("Admin created successfully!");
+      setAdminForm({ email: "", password: "" });
+      fetchNodeAdmins(selectedNode.id);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to create admin");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAssignPlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedNode) return;
@@ -277,7 +344,6 @@ const Organizations: React.FC = () => {
     setError('');
 
     try {
-      // Convert dates to ISO datetime format
       const startDateTime = new Date(assignPlanForm.startDate).toISOString();
       const endDateTime = assignPlanForm.endDate ? new Date(assignPlanForm.endDate).toISOString() : null;
 
@@ -319,9 +385,9 @@ const Organizations: React.FC = () => {
     }
   };
 
-  const getAllNodes = (nodes: OrgNode[]): OrgNode[] => {
+  const getAllNodes = (nodesList: OrgNode[]): OrgNode[] => {
     let result: OrgNode[] = [];
-    nodes.forEach(node => {
+    nodesList.forEach(node => {
       result.push(node);
       if (node.children && node.children.length > 0) {
         result = result.concat(getAllNodes(node.children));
@@ -342,13 +408,13 @@ const Organizations: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+      {/* Alert Notifications */}
       {success && (
         <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700">
           <CheckCircle className="w-5 h-5" />
           <span>{success}</span>
         </div>
       )}
-
       {error && (
         <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
           <AlertCircle className="w-5 h-5" />
@@ -362,11 +428,14 @@ const Organizations: React.FC = () => {
           <p className="text-slate-500">Global hierarchy management and asset tracking.</p>
         </div>
         <button
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => {
+            setCreateForm({ ...createForm, parentId: '', maxSubNodes: 0 });
+            setIsCreateModalOpen(true);
+          }}
           className="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold transition-all shadow-lg shadow-blue-200"
         >
           <Plus className="w-5 h-5" />
-          <span>Add Node</span>
+          <span>Add Root Node</span>
         </button>
       </header>
 
@@ -405,12 +474,12 @@ const Organizations: React.FC = () => {
         </div>
 
         {/* Right Side: Details Pane */}
-        {selectedNode && (
+        {selectedNode ? (
           <div className="lg:col-span-8 space-y-6 overflow-y-auto pr-2 pb-4">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-600 px-8 flex items-end">
-                <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center translate-y-6">
-                  <Building2 className="w-8 h-8 text-blue-600" />
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center translate-y-6 text-2xl">
+                  {selectedNode.type === 'company' ? '🏢' : selectedNode.type === 'school' ? '🏫' : '🏗️'}
                 </div>
               </div>
 
@@ -425,19 +494,43 @@ const Organizations: React.FC = () => {
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleDeleteNode(selectedNode.id)}
-                      className="px-4 py-2 border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-all"
+                      onClick={() => {
+                        setSelectedNode(selectedNode);
+                        setIsAdminModalOpen(true);
+                        fetchNodeAdmins(selectedNode.id);
+                      }}
+                      className="px-4 py-2 border border-blue-200 text-blue-600 rounded-xl text-sm font-semibold hover:bg-blue-50 transition-all"
                     >
-                      Delete
+                      Manage Admins
                     </button>
                     <button
                       onClick={() => {
-                        setCreateForm({ ...createForm, parentId: selectedNode.id });
+                        setEditForm({
+                          id: selectedNode.id,
+                          name: selectedNode.name,
+                          type: selectedNode.type,
+                          maxSubNodes: selectedNode.maxSubNodes,
+                        });
+                        setIsEditModalOpen(true);
+                      }}
+                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all"
+                    >
+                      Edit Node
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCreateForm({ ...createForm, parentId: selectedNode.id, maxSubNodes: 0 });
                         setIsCreateModalOpen(true);
                       }}
-                      className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all"
+                      className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg"
                     >
                       Add Sub-Node
+                    </button>
+                    <button
+                      onClick={() => handleDeleteNode(selectedNode.id)}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                    >
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -460,9 +553,9 @@ const Organizations: React.FC = () => {
                   <div className="space-y-1">
                     <div className="flex items-center text-slate-400 mb-1">
                       <Layers className="w-4 h-4 mr-2" />
-                      <span className="text-xs font-bold uppercase tracking-wider">Direct Children</span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Quota</span>
                     </div>
-                    <p className="text-slate-800 font-semibold">{selectedNode.children?.length || 0} Units</p>
+                    <p className="text-slate-800 font-semibold">{selectedNode.children?.length || 0} / {selectedNode.maxSubNodes} Sub-Nodes</p>
                   </div>
                 </div>
               </div>
@@ -473,11 +566,11 @@ const Organizations: React.FC = () => {
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-slate-800">Subscription Plans</h3>
-                  <p className="text-sm text-slate-500">Active plan assignments for this organization</p>
+                  <p className="text-sm text-slate-500">Active plan assignments</p>
                 </div>
                 <button
                   onClick={() => setIsAssignPlanModalOpen(true)}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-blue-200"
+                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Assign Plan</span>
@@ -496,257 +589,193 @@ const Organizations: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {orgPlans.map((plan) => {
-                      const securityLevels = [
-                        plan.allowL1 && 'L1',
-                        plan.allowL2 && 'L2',
-                        plan.allowL3 && 'L3',
-                        plan.allowL4 && 'L4',
-                      ].filter(Boolean);
-
-                      return (
-                        <div
-                          key={plan.id}
-                          className="border border-slate-200 rounded-xl p-4 hover:border-blue-300 transition-all"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h4 className="font-bold text-slate-800">{plan.planName}</h4>
-                                <span
-                                  className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                    plan.status === 'active'
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : plan.status === 'expired'
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
-                                >
-                                  {plan.status}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-                                <div>
-                                  <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                                    <DollarSign className="w-3 h-3" />
-                                    Price
-                                  </div>
-                                  <p className="text-sm font-semibold text-slate-700">${plan.planPrice}/mo</p>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                                    <ShieldCheck className="w-3 h-3" />
-                                    Security
-                                  </div>
-                                  <p className="text-sm font-semibold text-slate-700">{securityLevels.join(', ')}</p>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    Guards
-                                  </div>
-                                  <p className="text-sm font-semibold text-slate-700">{plan.maxGuards}</p>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
-                                    Passes
-                                  </div>
-                                  <p className="text-sm font-semibold text-slate-700">{plan.maxGuestPasses}</p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
-                                <span>Start: {new Date(plan.startDate).toLocaleDateString()}</span>
-                                {plan.endDate && (
-                                  <>
-                                    <span>•</span>
-                                    <span>End: {new Date(plan.endDate).toLocaleDateString()}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            <button
-                              onClick={() => handleRemovePlan(plan.id)}
-                              className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                              title="Remove plan"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                    {orgPlans.map((plan) => (
+                      <div key={plan.id} className="border border-slate-200 rounded-xl p-4 hover:border-blue-300 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <h4 className="font-bold text-slate-800">{plan.planName}</h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                              {plan.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-xs text-slate-500">
+                             <div className="flex items-center gap-1"><DollarSign className="w-3 h-3"/> ${plan.planPrice}/mo</div>
+                             <div className="flex items-center gap-1"><User className="w-3 h-3"/> {plan.maxGuards} Guards</div>
+                             <div className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {plan.maxGuestPasses} Passes</div>
+                             <div className="flex items-center gap-1"><ShieldCheck className="w-3 h-3"/> {[plan.allowL1&&'L1',plan.allowL2&&'L2',plan.allowL3&&'L3',plan.allowL4&&'L4'].filter(Boolean).join(', ')}</div>
                           </div>
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-4">
+                          <div className="text-right whitespace-nowrap">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Expires</p>
+                            <p className="text-xs font-semibold text-slate-700">{plan.endDate ? new Date(plan.endDate).toLocaleDateString() : 'Never'}</p>
+                          </div>
+                          <button onClick={() => handleRemovePlan(plan.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
           </div>
+        ) : (
+          <div className="lg:col-span-8 flex flex-col items-center justify-center text-slate-400 p-12 bg-white rounded-2xl border border-slate-100 border-dashed">
+            <Building2 className="w-16 h-16 mb-4 opacity-20" />
+            <p className="text-lg font-medium text-slate-300">Select an organization to view details</p>
+          </div>
         )}
       </div>
+
+      {/* --- MODALS --- */}
 
       {/* Create Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+               <h3 className="text-xl font-bold text-slate-800">Assign Sub-Node</h3>
+               <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-6 h-6 rotate-45"/></button>
+             </div>
+             <form className="p-6 space-y-4" onSubmit={handleCreateNode}>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Parent Node</label>
+                  <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-600">
+                    {selectedNode?.name || 'Root Organization'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Node Name</label>
+                  <input type="text" required value={createForm.name} onChange={(e)=>setCreateForm({...createForm, name: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Node Type</label>
+                  <select required value={createForm.type} onChange={(e)=>setCreateForm({...createForm, type: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="techpark">Tech Park</option>
+                    <option value="school">School</option>
+                    <option value="block">Block</option>
+                    <option value="building">Building</option>
+                    <option value="classroom">Classroom</option>
+                    <option value="lab">Lab</option>
+                    <option value="company">Company</option>
+                    <option value="gate">Gate</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Max Sub-Nodes Quota</label>
+                  <input type="number" required min="0" value={createForm.maxSubNodes} onChange={(e)=>setCreateForm({...createForm, maxSubNodes: parseInt(e.target.value)||0})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div className="pt-4 flex space-x-3">
+                  <button type="button" onClick={()=>setIsCreateModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={submitting} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-200 disabled:opacity-50">
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : 'Create Node'}
+                  </button>
+                </div>
+             </form>
+           </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+               <h3 className="text-xl font-bold text-slate-800">Edit Node</h3>
+               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-6 h-6 rotate-45"/></button>
+             </div>
+             <form className="p-6 space-y-4" onSubmit={handleUpdateNode}>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Node Name</label>
+                  <input type="text" required value={editForm.name} onChange={(e)=>setEditForm({...editForm, name: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                </div>
+                <div>
+                   <label className="block text-sm font-semibold text-slate-700 mb-1">Max Sub-Nodes Quota</label>
+                   <input type="number" required min="0" value={editForm.maxSubNodes} onChange={(e)=>setEditForm({...editForm, maxSubNodes: parseInt(e.target.value)||0})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div className="pt-4 flex space-x-3">
+                  <button type="button" onClick={()=>setIsEditModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={submitting} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-200 disabled:opacity-50">
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : 'Save Changes'}
+                  </button>
+                </div>
+             </form>
+           </div>
+        </div>
+      )}
+
+      {/* Admin Modal */}
+      {isAdminModalOpen && selectedNode && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-800">Create Organization Node</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <Plus className="w-6 h-6 rotate-45" />
-              </button>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Manage Admins</h3>
+                <p className="text-xs text-slate-500">For {selectedNode.name}</p>
+              </div>
+              <button onClick={() => setIsAdminModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-6 h-6 rotate-45"/></button>
             </div>
-            <form className="p-6 space-y-4" onSubmit={handleCreateNode}>
+            
+            <div className="p-6 overflow-y-auto space-y-8 flex-1">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-800 mb-3">Add New Admin</h4>
+                <form className="grid grid-cols-1 sm:grid-cols-2 gap-4" onSubmit={handleCreateAdmin}>
+                  <input type="email" required value={adminForm.email} onChange={(e)=>setAdminForm({...adminForm, email: e.target.value})} className="px-4 py-2 border border-slate-200 rounded-lg text-sm" placeholder="email@example.com"/>
+                  <input type="password" required value={adminForm.password} onChange={(e)=>setAdminForm({...adminForm, password: e.target.value})} className="px-4 py-2 border border-slate-200 rounded-lg text-sm" placeholder="Password"/>
+                  <button type="submit" disabled={submitting} className="sm:col-span-2 py-2 bg-blue-600 text-white rounded-lg font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin"/> : "Provision Admin"}
+                  </button>
+                </form>
+              </div>
+
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Node Name</label>
-                <input
-                  type="text"
-                  required
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="e.g., Silicon Valley Tech Park"
-                />
+                <h4 className="text-sm font-bold text-slate-800 mb-3">Active Admins</h4>
+                <div className="border border-slate-100 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 font-bold text-slate-500 uppercase">
+                      <tr><th className="px-4 py-3">Email</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Created</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {nodeAdmins.map(admin => (
+                        <tr key={admin.id}>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{admin.email}</td>
+                          <td className="px-4 py-3 text-emerald-600 font-bold uppercase">{admin.status}</td>
+                          <td className="px-4 py-3 text-slate-400">{new Date(admin.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                      {nodeAdmins.length === 0 && <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400 italic">No admins provisioned for this unit.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Node Type</label>
-                <select
-                  required
-                  value={createForm.type}
-                  onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="techpark">Tech Park</option>
-                  <option value="block">Block</option>
-                  <option value="building">Building</option>
-                  <option value="company">Company</option>
-                  <option value="gate">Gate</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Parent Node (Optional)</label>
-                <select
-                  value={createForm.parentId}
-                  onChange={(e) => setCreateForm({ ...createForm, parentId: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="">None (Root Node)</option>
-                  {allFlatNodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.name} ({node.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="pt-4 flex space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="flex-1 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50"
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    'Create Node'
-                  )}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* Assign Plan Modal */}
-      {isAssignPlanModalOpen && (
+      {isAssignPlanModalOpen && selectedNode && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-800">Assign Subscription Plan</h3>
-              <button onClick={() => setIsAssignPlanModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <Plus className="w-6 h-6 rotate-45" />
-              </button>
+              <h3 className="text-xl font-bold text-slate-800">Assign Subscription</h3>
+              <button onClick={() => setIsAssignPlanModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Plus className="w-6 h-6 rotate-45"/></button>
             </div>
             <form className="p-6 space-y-4" onSubmit={handleAssignPlan}>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Subscription Plan</label>
-                <select
-                  required
-                  value={assignPlanForm.subscriptionPlanId}
-                  onChange={(e) => setAssignPlanForm({ ...assignPlanForm, subscriptionPlanId: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="">Select a plan</option>
-                  {availablePlans.map((plan) => {
-                    const securityLevels = [
-                      plan.allowL1 && 'L1',
-                      plan.allowL2 && 'L2',
-                      plan.allowL3 && 'L3',
-                      plan.allowL4 && 'L4',
-                    ].filter(Boolean).join(', ');
-
-                    return (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} - ${plan.price}/mo ({securityLevels})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  required
-                  value={assignPlanForm.startDate}
-                  onChange={(e) => setAssignPlanForm({ ...assignPlanForm, startDate: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">End Date (Optional)</label>
-                <input
-                  type="date"
-                  value={assignPlanForm.endDate}
-                  onChange={(e) => setAssignPlanForm({ ...assignPlanForm, endDate: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-slate-400 mt-1">Leave empty for ongoing subscription</p>
+              <select required value={assignPlanForm.subscriptionPlanId} onChange={(e)=>setAssignPlanForm({...assignPlanForm, subscriptionPlanId: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm">
+                <option value="">Select a plan</option>
+                {availablePlans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} (${plan.price}/{plan.duration})</option>)}
+              </select>
+              <div className="grid grid-cols-2 gap-4">
+                <input type="date" required value={assignPlanForm.startDate} onChange={(e)=>setAssignPlanForm({...assignPlanForm, startDate: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm" />
+                <input type="date" value={assignPlanForm.endDate} onChange={(e)=>setAssignPlanForm({...assignPlanForm, endDate: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm" />
               </div>
               <div className="pt-4 flex space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsAssignPlanModalOpen(false)}
-                  className="flex-1 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50"
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Assigning...
-                    </>
-                  ) : (
-                    'Assign Plan'
-                  )}
+                <button type="button" onClick={()=>setIsAssignPlanModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={submitting} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-semibold shadow-lg disabled:opacity-50">
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : 'Confirm Selection'}
                 </button>
               </div>
             </form>

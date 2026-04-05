@@ -11,6 +11,7 @@ interface Admin {
   createdAt: string;
   organizationNodeId: string;
   organizationName: string;
+  canManageHierarchy: boolean;
 }
 
 interface OrgNode {
@@ -34,6 +35,7 @@ const AdminManagement: React.FC = () => {
     email: '',
     password: '',
     organizationNodeId: '',
+    canManageHierarchy: false,
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +75,7 @@ const AdminManagement: React.FC = () => {
       await api.post('/api/superadmin/admins', createForm);
       setSuccess('Admin created successfully!');
       setIsCreateModalOpen(false);
-      setCreateForm({ email: '', password: '', organizationNodeId: '' });
+      setCreateForm({ email: '', password: '', organizationNodeId: '', canManageHierarchy: false });
       fetchAdmins();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -178,6 +180,7 @@ const AdminManagement: React.FC = () => {
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Admin Details</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Assigned Node</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Hierarchy Rights</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Created</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
             </tr>
@@ -213,6 +216,13 @@ const AdminManagement: React.FC = () => {
                       admin.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
                     }`}>
                       {admin.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      admin.canManageHierarchy ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      {admin.canManageHierarchy ? 'YES' : 'NO'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -296,6 +306,18 @@ const AdminManagement: React.FC = () => {
                     <option key={org.id} value={org.id}>{org.name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="flex items-center space-x-2 pt-2 pb-2">
+                <input
+                  type="checkbox"
+                  id="canManageHierarchy"
+                  checked={createForm.canManageHierarchy}
+                  onChange={(e) => setCreateForm({ ...createForm, canManageHierarchy: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="canManageHierarchy" className="text-sm font-semibold text-slate-700">
+                  Can Manage Organizational Hierarchy
+                </label>
               </div>
               <div className="pt-4 flex space-x-3">
                 <button

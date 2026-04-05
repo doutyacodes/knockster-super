@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
 import { organizationNode, auditLog } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { authenticateRequest } from '@/lib/auth';
 import {
   successResponse,
@@ -12,8 +12,9 @@ import { z } from 'zod';
 
 const createOrgSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(['techpark', 'block', 'building', 'company', 'gate', 'custom']),
+  type: z.enum(['techpark', 'block', 'building', 'company', 'gate', 'school', 'classroom', 'lab', 'custom']),
   parentId: z.string().uuid().nullable().optional(),
+  maxSubNodes: z.number().int().min(0).default(0),
   planOverrideLevel: z.number().min(1).max(4).nullable().optional(),
 });
 
@@ -35,14 +36,16 @@ export async function GET(request: NextRequest) {
       organizations = await db
         .select()
         .from(organizationNode)
-        .where(eq(organizationNode.parentId, parentId));
+        .where(eq(organizationNode.parentId, parentId))
+        .orderBy(desc(organizationNode.createdAt));
     } else if (includeChildren) {
-      organizations = await db.select().from(organizationNode);
+      organizations = await db.select().from(organizationNode).orderBy(desc(organizationNode.createdAt));
     } else {
       organizations = await db
         .select()
         .from(organizationNode)
-        .where(eq(organizationNode.parentId, null as any));
+        .where(eq(organizationNode.parentId, null as any))
+        .orderBy(desc(organizationNode.createdAt));
     }
 
     return successResponse(organizations);
@@ -64,10 +67,10 @@ export async function POST(request: NextRequest) {
     const validation = createOrgSchema.safeParse(body);
 
     if (!validation.success) {
-      return errorResponse(validation.error.errors[0].message);
+      return errorResponse(validation.error.issues[0].message);
     }
 
-    const { name, type, parentId, planOverrideLevel } = validation.data;
+    const { name, type, parentId, planOverrideLevel, maxSubNodes } = validation.data;
 
     // If parentId provided, verify it exists
     if (parentId) {
@@ -93,6 +96,7 @@ export async function POST(request: NextRequest) {
         name,
         type,
         parentId: parentId || null,
+        maxSubNodes,
         planOverrideLevel: planOverrideLevel || null,
         status: 'active',
       });

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/db';
 import { orgAdmin, organizationNode, auditLog } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import {
   successResponse,
@@ -14,6 +14,7 @@ const createAdminSchema = z.object({
   organizationNodeId: z.string().uuid('Invalid organization ID'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  canManageHierarchy: z.boolean().optional().default(false),
 });
 
 // GET - List all org admins
@@ -37,12 +38,14 @@ export async function GET(request: NextRequest) {
           email: orgAdmin.email,
           status: orgAdmin.status,
           createdAt: orgAdmin.createdAt,
+          canManageHierarchy: orgAdmin.canManageHierarchy,
           organizationNodeId: orgAdmin.organizationNodeId,
           organizationName: organizationNode.name,
         })
         .from(orgAdmin)
         .leftJoin(organizationNode, eq(orgAdmin.organizationNodeId, organizationNode.id))
-        .where(eq(orgAdmin.organizationNodeId, organizationNodeId));
+        .where(eq(orgAdmin.organizationNodeId, organizationNodeId))
+        .orderBy(desc(orgAdmin.createdAt));
     } else {
       // Get all admins
       admins = await db
@@ -55,7 +58,8 @@ export async function GET(request: NextRequest) {
           organizationName: organizationNode.name,
         })
         .from(orgAdmin)
-        .leftJoin(organizationNode, eq(orgAdmin.organizationNodeId, organizationNode.id));
+        .leftJoin(organizationNode, eq(orgAdmin.organizationNodeId, organizationNode.id))
+        .orderBy(desc(orgAdmin.createdAt));
     }
 
     return successResponse(admins);
@@ -80,7 +84,7 @@ export async function POST(request: NextRequest) {
       return errorResponse(validation.error.errors[0].message);
     }
 
-    const { organizationNodeId, email, password } = validation.data;
+    const { organizationNodeId, email, password, canManageHierarchy } = validation.data;
 
     // Verify organization exists
     const [org] = await db
@@ -118,6 +122,7 @@ export async function POST(request: NextRequest) {
         organizationNodeId,
         email,
         passwordHash,
+        canManageHierarchy,
         status: 'active',
       });
 
