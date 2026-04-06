@@ -156,7 +156,7 @@ const Organizations: React.FC = () => {
 
   // Forms state
   const [editForm, setEditForm] = useState({ id: '', name: '', type: '', maxSubNodes: 0 });
-  const [createForm, setCreateForm] = useState({ name: '', type: 'company', parentId: '', maxSubNodes: 0 });
+  const [createForm, setCreateForm] = useState<{ name: string; type: string; parentId: string | null; maxSubNodes: number }>({ name: '', type: 'company', parentId: null, maxSubNodes: 0 });
   const [assignPlanForm, setAssignPlanForm] = useState({ subscriptionPlanId: '', startDate: new Date().toISOString().split('T')[0], endDate: '' });
   const [adminForm, setAdminForm] = useState({ email: "", password: "" });
 
@@ -254,7 +254,7 @@ const Organizations: React.FC = () => {
       });
       setSuccess('Organization node created successfully!');
       setIsCreateModalOpen(false);
-      setCreateForm({ name: '', type: 'company', parentId: '', maxSubNodes: 0 });
+      setCreateForm({ name: '', type: 'company', parentId: null, maxSubNodes: 0 });
       fetchOrganizations();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -429,7 +429,8 @@ const Organizations: React.FC = () => {
         </div>
         <button
           onClick={() => {
-            setCreateForm({ ...createForm, parentId: '', maxSubNodes: 0 });
+            setSelectedNode(null);
+            setCreateForm({ name: '', type: 'company', parentId: null, maxSubNodes: 0 });
             setIsCreateModalOpen(true);
           }}
           className="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold transition-all shadow-lg shadow-blue-200"
@@ -519,7 +520,7 @@ const Organizations: React.FC = () => {
                     </button>
                     <button
                       onClick={() => {
-                        setCreateForm({ ...createForm, parentId: selectedNode.id, maxSubNodes: 0 });
+                        setCreateForm({ name: '', type: 'company', parentId: selectedNode.id, maxSubNodes: 0 });
                         setIsCreateModalOpen(true);
                       }}
                       className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg"
@@ -643,7 +644,7 @@ const Organizations: React.FC = () => {
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Parent Node</label>
                   <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-600">
-                    {selectedNode?.name || 'Root Organization'}
+                    {createForm.parentId ? allFlatNodes.find(n => n.id === createForm.parentId)?.name : 'Root Organization'}
                   </div>
                 </div>
                 <div>
